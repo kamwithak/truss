@@ -4,6 +4,7 @@ import enums
 from django.db import transaction
 import update_object_in_database
 import api_client
+from django.http import JsonResponse
 
 """
 Task: Restructure the following function for both robust functionality and maintainability.
@@ -13,21 +14,34 @@ The resulting return values in different scenarios should be constant.
 """
 
 def rest_endpoint(input):
-    qs = query_objects(id=input.id)
-    if not qs.exists():
-        return 404
-    obj = qs.get()
+    # Input validation
+    if not input.id or not input.name or not input.type or not input.details:
+        return JsonResponse({"error": "Missing required fields"}, status=400)
+
     if len(input.name) > 5:
-        return 422
-    obj.name = input.name + "_object"
-    obj.save()
+        return JsonResponse({"error": "Name too long"}, status=422)
+
     if input.type != "bank_account":
-        return 422
+        return JsonResponse({"error": "Invalid type"}, status=422)
+
+    # Fetch object
+    try:
+        obj = query_objects(id=input.id).get()
+    except query_objects.DoesNotExist:
+        return JsonResponse({"error": "Object not found"}, status=404)
+
+    # Update object
+    obj.name = input.name + "_object"
     obj.type = enums.Types.BANK_ACCOUNT
-    obj.save()
-    with transaction.atmoic():
-        response = api_client.post(obj, input)
-        if response.status != 200:
-            return 500
-        update_object_in_database(obj, input.details)
-    return 200
+
+    try:
+        with transaction.atomic():
+            obj.save()
+            response = api_client.post(obj, input)
+            if response.status != 200:
+                raise Exception("API client error")
+            update_object_in_database(obj, input.details)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+    return JsonResponse({"message": "Success"}, status=200)
