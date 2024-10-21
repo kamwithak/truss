@@ -4,7 +4,6 @@ import ForeignKey
 import BooleanField
 import DateTimeField, now
 
-
 class Company(Model):
     structure = IntegerField()
 class Customer(Model):
@@ -28,4 +27,18 @@ def get_companies_with_recent_friend():
     -------
     `list(Company, ...)`
     """
-    raise NotImplementedError
+    # Get all companies
+    companies = Company.objects.all()
+    
+    # List to store companies with recent friend
+    result = []
+    
+    for company in companies:
+        # Get the most recent customer for this company
+        most_recent_customer = Customer.objects.filter(company=company).order_by('-created_at').first()
+        
+        # Check if the most recent customer is a friend
+        if most_recent_customer and most_recent_customer.friend:
+            result.append(company)
+    
+    return result
